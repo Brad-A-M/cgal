@@ -94,26 +94,32 @@ int main(int argc, char* argv[])
   }
   std::cout << "The Euclidean test result is: " << result << std::endl;
 
-  //Test geodesic
+#ifdef TEST_PURPOSE
+  CGAL::AABB_tree<AABB_face_graph_traits> tree;
+  PMP::build_AABB_tree(mesh, tree);
+  Face_location query_location_target = PMP::locate_with_AABB_tree(euclidean_points[0], tree, mesh);
+  Face_location query_location_source = PMP::locate_with_AABB_tree(euclidean_points[1], tree, mesh);
+    
+  std::cout << "Euclidean: " << sqrt(CGAL::squared_distance(euclidean_points[0],euclidean_points[1])) << std::endl;
+  std::cout << "Geodesic: " << geodesiceApproximation(query_location_source, query_location_target, mesh) << std::endl;
+
+    //Test geodesic
   //why can't I use geodesic?????
   result=true;
   std::vector<Point> geodesic_points;
   PMP::sample_triangle_mesh(mesh,
                               std::back_inserter(geodesic_points),
                               CGAL::parameters::use_poisson_disk_sampling_geodesic(true).
-                                                sampling_radius(sampling_radius).number_of_darts(number_of_darts).random_seed(CGAL::internal_np::random_seed));
+                                                sampling_radius(sampling_radius).number_of_darts(number_of_darts).random_seed(random_seed));
   std::ofstream out("geodesic-sampling.xyz");
   out << std::setprecision(17);
   std::copy(geodesic_points.begin(), geodesic_points.end(), std::ostream_iterator<Point>(out, "\n"));
   std::cout << geodesic_points.size() << std::endl;
-  CGAL::AABB_tree<AABB_face_graph_traits> tree;
-  PMP::build_AABB_tree(mesh, tree);
-
-/*
-  for(int i=0; i<euclidean_points.size(); i++){
+    
+  for(std::size_t i=0; i<geodesic_points.size(); i++){
     c = 100;
     Face_location query_location_source = PMP::locate_with_AABB_tree(geodesic_points[i], tree, mesh);
-    for(int j = 0; j<euclidean_points.size(); j++){
+    for(std::size_t j = 0; j<geodesic_points.size(); j++){
         Face_location query_location_target = PMP::locate_with_AABB_tree(geodesic_points[j], tree, mesh);
         d = geodesiceApproximation(query_location_source, query_location_target, mesh);
         //no point too close
@@ -123,13 +129,16 @@ int main(int argc, char* argv[])
         // no point too far
         if(d < c && d !=0){
             c = d;
-          }
+        }
     }
     if(c  > 2*sampling_radius){
         result = false;
     }
-  }
-  std::cout << "The geodesic test result is: " << result << std::endl;
+}
+    std::cout << "The geodesic test result is: " << result << std::endl;
+#endif
+/*
+
  */
   return 0;
 }
