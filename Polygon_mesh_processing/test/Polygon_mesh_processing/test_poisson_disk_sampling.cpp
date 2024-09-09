@@ -33,7 +33,7 @@ double geodesiceApproximation(const Face_location source, const Face_location ta
   PMP::Dual_geodesic_solver<double> solver;
   PMP::init_geodesic_dual_solver(solver, mesh);
   std::vector<Edge_location> edge_locations;
-    
+
   CGAL::Polygon_mesh_processing::locally_shortest_path<double>(source, target, mesh, edge_locations, solver);
 
   return PMP::path_length<K>(edge_locations,source,target,mesh);
@@ -51,35 +51,33 @@ int main(int argc, char* argv[])
   }
 
   const double sampling_radius = (argc > 2) ? std::atof(argv[2]) : 0.009;
-    
+
   const std::size_t number_of_darts = (argc > 3) ? std::atof(argv[3]) : 30;
-    
+
   CGAL::Random random_seed = (argc > 4) ? std::atof(argv[4]) : CGAL::get_default_random();
 
   std::vector<Point> euclidean_points;
   PMP::sample_triangle_mesh(mesh,
                             std::back_inserter(euclidean_points),
                             CGAL::parameters::use_poisson_disk_sampling_euclidean(true).
-                                              sampling_radius(sampling_radius).number_of_darts(number_of_darts).random_seed(CGAL::internal_np::random_seed));
+                                              sampling_radius(sampling_radius).number_of_darts(number_of_darts).random_seed(random_seed));
 
   std::ofstream out1("euclidean-sampling.xyz");
   out1 << std::setprecision(17);
   std::copy(euclidean_points.begin(), euclidean_points.end(), std::ostream_iterator<Point>(out1, "\n"));
 
   std::cout << euclidean_points.size() << std::endl;
-    
+
  //test if euclidean_points are far enough apart.
-  
+
   bool result=true;
   double d;
   double c;
-    
-    int k;
-   
-  for(int i=0; i<euclidean_points.size(); i++){
+
+  for(std::size_t i=0; i<euclidean_points.size(); i++){
       c = 100;
-      for(int j = 0; j<euclidean_points.size(); j++){
-          
+      for(std::size_t j = 0; j<euclidean_points.size(); j++){
+
         d = sqrt(CGAL::squared_distance(euclidean_points[i],euclidean_points[j]));
         //no point too close
         if(d< sampling_radius && d != 0){
@@ -95,7 +93,7 @@ int main(int argc, char* argv[])
       }
   }
   std::cout << "The Euclidean test result is: " << result << std::endl;
-    
+
   //Test geodesic
   //why can't I use geodesic?????
   result=true;
@@ -110,7 +108,7 @@ int main(int argc, char* argv[])
   std::cout << geodesic_points.size() << std::endl;
   CGAL::AABB_tree<AABB_face_graph_traits> tree;
   PMP::build_AABB_tree(mesh, tree);
-  
+
 /*
   for(int i=0; i<euclidean_points.size(); i++){
     c = 100;
