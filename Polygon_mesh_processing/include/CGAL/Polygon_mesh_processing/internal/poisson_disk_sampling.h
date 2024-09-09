@@ -43,10 +43,10 @@ template <class GeomTraits, class TriangleMesh>
 double geodesiceApproximation(const Face_location<TriangleMesh, typename GeomTraits::FT>& source,
                               const Face_location<TriangleMesh, typename GeomTraits::FT>& target,
                               const TriangleMesh& mesh,
-                              Dual_geodesic_solver<double>* solver_ptr)
+                              const Dual_geodesic_solver<double>& solver)
 {
   std::vector<Edge_location<TriangleMesh, typename GeomTraits::FT>> edge_locations;
-  CGAL::Polygon_mesh_processing::locally_shortest_path<double>(source, target, mesh, edge_locations, *solver_ptr);
+  CGAL::Polygon_mesh_processing::locally_shortest_path<double>(source, target, mesh, edge_locations, solver);
 
   return path_length<GeomTraits>(edge_locations,source,target,mesh);
 }
@@ -58,10 +58,10 @@ double distancePoints(const TriangleMesh& mesh,
                       const typename GeomTraits::Point_3& target,
                       const Face_location<TriangleMesh, typename GeomTraits::FT>& start,
                       const Face_location<TriangleMesh, typename GeomTraits::FT>& end,
-                      Dual_geodesic_solver<double>* solver_ptr)
+                      const Dual_geodesic_solver<double>& solver)
 {
   if constexpr (V==GEODESIC_DISTANCE)
-    return geodesiceApproximation<GeomTraits>(start, end, mesh, solver_ptr);
+    return geodesiceApproximation<GeomTraits>(start, end, mesh, solver);
   if constexpr (V==EUCLIDEAN_DISTANCE)
     return euclideanDistancePoints<GeomTraits>(source, target);
   return 0;
@@ -98,7 +98,7 @@ faces_in_sub_mesh(const typename GeomTraits::Point_3& c,
 //      return (distancePoints<V>(mesh, mesh.point(source(h,mesh)), c, tree)< 3*minDistance ||
 //              distancePoints<V>(mesh, mesh.point(target(h,mesh)), c, tree)< 3*minDistance);
 
-   
+
     return typename GeomTraits::Compare_squared_distance_3()(c, edge, sqrt(3*minDistance))!=CGAL::LARGER;
   };
 
@@ -136,7 +136,7 @@ is_far_enough(const typename GeomTraits::Point_3 c,
               double minDistance,
               std::vector<typename boost::graph_traits<TriangleMesh>::face_descriptor> selection,
               const PointsPerFaceMap& face_points,
-              Dual_geodesic_solver<double>* solver_ptr)
+              const Dual_geodesic_solver<double>& solver)
 {
   for (typename boost::graph_traits<TriangleMesh>::face_descriptor f : selection)
   {
@@ -145,7 +145,7 @@ is_far_enough(const typename GeomTraits::Point_3 c,
       Face_location<TriangleMesh, typename GeomTraits::FT> p_location = locate_in_face(p, f, mesh);
       //Todo: Ask why  is distancePoints for Euclidean so much slower then just
       //calling euclideanDistancePoints?
-      if (distancePoints<GeomTraits,V>(mesh, c, p, c_location, p_location, solver_ptr) < minDistance)
+      if (distancePoints<GeomTraits,V>(mesh, c, p, c_location, p_location, solver) < minDistance)
       //if (euclideanDistancePoints(c, p) < minDistance)
       //if (geodesiceApproximation(c_location, p_location, mesh) < minDistance)
           return false;
@@ -168,9 +168,9 @@ poisson_disk_sampling(const TriangleMesh& mesh,
   using Face_location = Face_location<TriangleMesh, FT>;
 
 
-  Dual_geodesic_solver<double>* solver_ptr;
+  Dual_geodesic_solver<double> solver;
   if constexpr (V==GEODESIC_DISTANCE)
-    init_geodesic_dual_solver(*solver_ptr, mesh);
+    init_geodesic_dual_solver(solver, mesh);
 
   std::vector<Point> points;
   std::queue<std::pair<Point, face_descriptor>> activePoints;
@@ -203,7 +203,7 @@ poisson_disk_sampling(const TriangleMesh& mesh,
       std::vector<Face_location> path = straightest_geodesic<GeomTraits>(current_location, dir, distance, mesh);
       Face_location newLocation = path.back();
       Point newPoint = construct_point(path.back(), mesh);
-      if(is_far_enough<GeomTraits,V>(newPoint, newLocation, mesh, minDistance, selection, make_random_access_property_map(face_points), solver_ptr))
+      if(is_far_enough<GeomTraits,V>(newPoint, newLocation, mesh, minDistance, selection, make_random_access_property_map(face_points), solver))
       {
         face_points[path.back().first].push_back(newPoint);
         activePoints.push(std::make_pair(newPoint,path.back().first));
