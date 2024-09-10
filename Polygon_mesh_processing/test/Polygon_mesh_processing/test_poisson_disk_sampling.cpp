@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  const double sampling_radius = (argc > 2) ? std::atof(argv[2]) : 0.009;
+  const double sampling_radius = (argc > 2) ? std::atof(argv[2]) : 0.07;
 
   const std::size_t number_of_darts = (argc > 3) ? std::atof(argv[3]) : 30;
 
@@ -93,7 +93,7 @@ int main(int argc, char* argv[])
       }
   }
   std::cout << "The Euclidean test result is: " << result << std::endl;
-
+    /*
 #ifdef TEST_PURPOSE
   CGAL::AABB_tree<AABB_face_graph_traits> tree;
   PMP::build_AABB_tree(mesh, tree);
@@ -105,6 +105,7 @@ int main(int argc, char* argv[])
 
     //Test geodesic
   //why can't I use geodesic?????
+   
   result=true;
   std::vector<Point> geodesic_points;
   PMP::sample_triangle_mesh(mesh,
@@ -137,7 +138,7 @@ int main(int argc, char* argv[])
 }
     std::cout << "The geodesic test result is: " << result << std::endl;
 #endif
-/*
+
 
  */
   return 0;
