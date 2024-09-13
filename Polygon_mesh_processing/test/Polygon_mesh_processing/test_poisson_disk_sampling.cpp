@@ -4,6 +4,8 @@
 #include <CGAL/Polygon_mesh_processing/Bsurf/locally_shortest_path.h>
 
 #include <CGAL/Polygon_mesh_processing/IO/polygon_mesh_io.h>
+#include <CGAL/Polygon_mesh_processing/triangulate_faces.h>
+#include <CGAL/Polygon_mesh_processing/stitch_borders.h>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -11,6 +13,8 @@
 #include <CGAL/AABB_face_graph_triangle_primitive.h>
 #include <CGAL/AABB_tree.h>
 #include <CGAL/AABB_traits_3.h>
+
+#include <CGAL/Polygon_mesh_processing/remesh.h>
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel   K;
 typedef K::Point_3                                            Point;
@@ -69,7 +73,7 @@ int main(int argc, char* argv[])
   std::cout << euclidean_points.size() << std::endl;
 
  //test if euclidean_points are far enough apart.
-
+    
   bool result=true;
   double d;
   double c;
@@ -93,7 +97,35 @@ int main(int argc, char* argv[])
       }
   }
   std::cout << "The Euclidean test result is: " << result << std::endl;
-    /*
+    
+  Mesh square;
+  CGAL::make_quad(Point(0,0,0), Point(1,0,0),Point(1,1,0),Point(0,1,0), square);
+  std::cout << "Square has " << faces(square).size() << " faces" << std::endl;
+  PMP::triangulate_faces(square);
+  std::vector<face_descriptor> selected_faces;
+  for(face_descriptor f : faces(square))
+  {
+      selected_faces.push_back(f);
+  }
+  std::cout << selected_faces.size() << std::endl;
+  PMP::isotropic_remeshing(selected_faces, 0.05, square);
+  std::cout << "Square now has " << faces(square).size() << " faces" << std::endl;
+  PMP::stitch_borders(square);
+  CGAL::IO::write_polygon_mesh("square.off", square, CGAL::parameters::stream_precision(17));
+    
+  std::vector<Point> square_points;
+  std::cout << "There are: " << square_points.size() << " points in the square." << std::endl;
+    
+  PMP::sample_triangle_mesh(square,
+                              std::back_inserter(square_points),
+                              CGAL::parameters::use_poisson_disk_sampling_euclidean(true).
+                                                sampling_radius(sampling_radius).number_of_darts(number_of_darts).random_seed(random_seed));
+
+    
+    
+ /*
+  //
+   
 #ifdef TEST_PURPOSE
   CGAL::AABB_tree<AABB_face_graph_traits> tree;
   PMP::build_AABB_tree(mesh, tree);
