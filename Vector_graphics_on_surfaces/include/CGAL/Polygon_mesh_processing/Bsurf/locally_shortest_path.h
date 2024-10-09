@@ -1289,6 +1289,8 @@ struct Locally_shortest_path_imp
     }
 #endif
 
+    if (len == 0) return {start_loc};
+
     auto get_halfedge_offset=[&mesh](const halfedge_descriptor& h_ref,const halfedge_descriptor& h_curr)
     {
       if( h_ref == h_curr) return 0;
@@ -1390,6 +1392,7 @@ struct Locally_shortest_path_imp
     {
       case 0:
       {
+        // TODO: handle is src_vertex is a border vertex: does not necessarily mean early exist as it depends on the direction
         vertex_descriptor src_vertex = std::get<vertex_descriptor>(var_des);
         halfedge_descriptor href = halfedge(curr_tid, mesh);
         int src_index = source(href, mesh)==src_vertex?0:(target(href,mesh)==src_vertex?1:2);
@@ -1403,8 +1406,6 @@ struct Locally_shortest_path_imp
         // 2 orientation tests to check if the angle is larger or smaller than Pi
         // 2 orientation tests are needed as curr_flat_tid orientation could be inverted during flattening
         Orientation dir_ori=orientation(v02,dir), v01_ori=orientation(v02,v01);
-
-        std::cout << "dir_ori!=v01_ori ? " << (dir_ori!=v01_ori) << "\n";
 
         // check if dir is  the cone centered at curr_flat_tid[src_vertex] (TODO: should be a predicate!)
         if ( dir_ori!=v01_ori ||
@@ -1428,8 +1429,6 @@ struct Locally_shortest_path_imp
             n = nv;
             hloop=opposite(next(hloop, mesh), mesh);
           }while(hloop!=hstart);
-
-          std::cout << std::acos(unnorm_cos_theta_2 / std::sqrt((v01*v01) * (v02*v02))) << "  vs  " << angles[0] << "\n";
 
           CGAL_assertion( std::acos(unnorm_cos_theta_2 / std::sqrt((v01*v01) * (v02*v02))) == angles[0]); // will not be true because of rounding
 
@@ -1492,6 +1491,7 @@ struct Locally_shortest_path_imp
       break;
       case 1:
       {
+        //TODO: handle if h is on the boundary (does not necessarily mean early exit, depends on direction)
         halfedge_descriptor h = std::get<halfedge_descriptor>(var_des);
         halfedge_descriptor href = halfedge(face(h,mesh), mesh);
         int opp_id = h==href?2:(next(href,mesh)==h?0:1);
@@ -1592,6 +1592,12 @@ struct Locally_shortest_path_imp
         accumulated +=
             sqrt(squared_distance(construct_point(curr_p,mesh), get(vpm,vid)));
 
+        // stop if hitting the boundary
+        for (halfedge_descriptor h : halfedges_around_target(vid, mesh))
+          if (is_border(h, mesh))
+            break;
+
+
   //   Point_3 vert = get(vpm,vid);
   //   Point_3 vert_adj=get(vpm,source(h,mesh));
   //   Vector_3 v = vert - vert_adj;
@@ -1619,6 +1625,10 @@ struct Locally_shortest_path_imp
       else
       {
         h_curr=opposite(get_halfedge(k, h_ref),mesh);
+
+        // break if hitting the boundary
+        if (is_border(h_curr, mesh))
+          break;
 
         face_descriptor adj = face(h_curr,mesh);
         std::array<FT,2> curr_alpha=make_array(t1,1-t1); //reversed because will switch face
@@ -1652,6 +1662,15 @@ struct Locally_shortest_path_imp
     }
 
     double excess = accumulated - len;
+
+    if (excess <= 0)
+    {
+#ifdef CGAL_DEBUG_BSURF
+      std::cout << "excess " << excess << std::endl;
+#endif
+      return result;
+    }
+
     Point_3 prev_pos = construct_point(*std::next(result.rbegin()),mesh);
     Point_3 last_pos = construct_point(result.back(),mesh);
     double alpha = excess / sqrt((last_pos - prev_pos).squared_length());
@@ -3273,6 +3292,7 @@ trace_geodesic_polygons(const Face_location<TriangleMesh, typename K::FT> &cente
       straightest_geodesic<K>(center, dir, scaling * std::sqrt(dir.squared_length()),tmesh);
     Face_location<TriangleMesh, typename K::FT> polygon_center = spath.back();
 
+    // TODO: avoid using the shortest path and directly use the straightest!
     std::vector<Edge_location<TriangleMesh, typename K::FT>> shortest_path;
       locally_shortest_path<typename K::FT>(center, polygon_center, tmesh, shortest_path, *solver_ptr);
 
@@ -3681,7 +3701,6 @@ trace_bezier_curves(const Face_location<TriangleMesh, typename K::FT> &center,
 
   std::size_t n=directions.size();
   std::vector< std::vector<Face_location<TriangleMesh, typename K::FT>> > result(n);
-  std::vector<Face_location<TriangleMesh, typename K::FT>> vertices(n);
 
 #ifndef CGAL_BSURF_USE_DIJKSTRA_SP
   const Dual_geodesic_solver<typename K::FT>* solver_ptr=&solver;
@@ -3738,6 +3757,104 @@ trace_bezier_curves(const Face_location<TriangleMesh, typename K::FT> &center,
           result[i].push_back(to_face_location(e, tmesh));
       }
       result[i].push_back(loc1);
+    }
+  }
+
+  return result;
+}
+
+//TODO: make sure it is consistent with the rest to not duplicate the last point if closed
+template <class K, class TriangleMesh>
+std::vector<Face_location<TriangleMesh, typename K::FT>>
+trace_polyline_of_bezier_curves(const Face_location<TriangleMesh, typename K::FT> &center,
+                                const std::vector<typename K::Vector_2>& directions,
+                                const std::vector<typename K::FT>& lengths,
+                                bool is_closed, // use [directions/lengths].front as last control point?
+                                const int num_subdiv,
+                                const TriangleMesh &tmesh
+#ifndef CGAL_BSURF_USE_DIJKSTRA_SP
+                                , const Dual_geodesic_solver<typename K::FT>& solver = {}
+#endif
+)
+{
+  using FT = typename K::FT;
+
+  std::size_t n = (directions.size() - (is_closed?0:1))/3;
+  CGAL_assertion( n * 3 + (is_closed?0:1) == directions.size() );
+
+  std::vector<Face_location<TriangleMesh, typename K::FT>> result;
+
+  // n is the number of quadruple of control points
+  // After num_subdiv steps, we have 2^num_subdiv * n quadruples of control points
+
+
+  // even if closed we will duplicate the last point
+  // (this is a lower bound without taking into account shortest path between points)
+  result.reserve( (1<<num_subdiv) * 3 + 2 );
+
+#ifndef CGAL_BSURF_USE_DIJKSTRA_SP
+  const Dual_geodesic_solver<typename K::FT>* solver_ptr=&solver;
+  Dual_geodesic_solver<typename K::FT> local_solver;
+  if (solver.graph.empty())
+  {
+    solver_ptr = &local_solver;
+    init_geodesic_dual_solver(local_solver, tmesh);
+  }
+#endif
+
+#ifdef CGAL_DEBUG_BSURF
+  std::ofstream debug_cp("/tmp/control_points.xyz");
+  std::ofstream debug_ep("/tmp/end_points.xyz");
+  debug_cp << std::setprecision(17);
+  debug_ep << std::setprecision(17);
+#endif
+
+  Face_location<TriangleMesh, FT> prev_loc = straightest_geodesic<K>(center,directions[0],lengths[0],tmesh).back(),
+                                  first_loc = prev_loc;
+
+  for (std::size_t i=0; i<n; ++i)
+  {
+    Bezier_segment<TriangleMesh, FT> control_loc;
+    control_loc[0]=prev_loc;
+    for (int k=1;k<4; ++k)
+    {
+      if (k!=3 || !is_closed || 3*i+k!=directions.size())
+        control_loc[k] = straightest_geodesic<K>(center,directions[3*i+k],lengths[3*i+k],tmesh).back();
+      else
+        control_loc[k] = first_loc;
+    }
+    prev_loc=control_loc[3];
+
+    #ifdef CGAL_DEBUG_BSURF
+      debug_ep << construct_point(control_loc[0], tmesh) << "\n";
+      debug_ep << construct_point(control_loc[3], tmesh) << "\n";
+      debug_cp << construct_point(control_loc[1], tmesh) << "\n";
+      debug_cp << construct_point(control_loc[2], tmesh) << "\n";
+    #endif
+
+    std::vector<Face_location<TriangleMesh, FT>> bezier =
+      recursive_de_Casteljau(tmesh, control_loc, num_subdiv
+#ifndef CGAL_BSURF_USE_DIJKSTRA_SP
+                            , *solver_ptr
+#endif
+                            );
+
+    if (i==0)
+      result.push_back(bezier[0]);
+    for(std::size_t b=0; b<bezier.size()-1; ++b)
+    {
+      const Face_location<TriangleMesh, FT>& loc = bezier[b];
+      const Face_location<TriangleMesh, FT>& loc1 = bezier[b+1];
+
+      // connect the two face locations with shortest path is they are in different faces
+      if (loc.first!=loc1.first)
+      {
+        std::vector<Edge_location<TriangleMesh, FT>> edge_locations;
+        locally_shortest_path<FT>(loc, loc1, tmesh, edge_locations, solver);
+        for (const Edge_location<TriangleMesh, FT>& e : edge_locations)
+          result.push_back(to_face_location(e, tmesh));
+      }
+      result.push_back(loc1);
     }
   }
 
