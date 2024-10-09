@@ -97,7 +97,7 @@ int main(int argc, char* argv[])
       }
   }
   std::cout << "The Euclidean test result is: " << result << std::endl;
-    /*
+    
   Mesh square;
   CGAL::make_quad(Point(0,0,0), Point(1,0,0),Point(1,1,0),Point(0,1,0), square);
   std::cout << "Square has " << faces(square).size() << " faces" << std::endl;
@@ -123,7 +123,7 @@ int main(int argc, char* argv[])
 
     
     
- 
+ /*
   //
    
 #ifdef TEST_PURPOSE
