@@ -194,6 +194,9 @@ poisson_disk_sampling(const TriangleMesh& mesh,
 
     std::vector<face_descriptor> selection = faces_in_sub_mesh<GeomTraits,V>(currentPoint, currentFace, mesh, minDistance);
     Face_location current_location = locate_in_face(currentPoint, currentFace, mesh);
+    if (current_location.second[0]<0) current_location.second[0]=0;
+    if (current_location.second[1]<0) current_location.second[1]=0;
+    if (current_location.second[2]<0) current_location.second[2]=0;
     int k = 0;
     while (k < kMaxTries)
     {

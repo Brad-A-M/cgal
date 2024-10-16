@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
   std::cout << euclidean_points.size() << std::endl;
 
  //test if euclidean_points are far enough apart.
-    
+
   bool result=true;
   double d;
   double c;
@@ -97,47 +97,44 @@ int main(int argc, char* argv[])
       }
   }
   std::cout << "The Euclidean test result is: " << result << std::endl;
-    
+
   Mesh square;
-  CGAL::make_quad(Point(0,0,0), Point(1,0,0),Point(1,1,0),Point(0,1,0), square);
-  std::cout << "Square has " << faces(square).size() << " faces" << std::endl;
-  PMP::triangulate_faces(square);
-  std::vector<face_descriptor> selected_faces;
-  for(face_descriptor f : faces(square))
-  {
-      selected_faces.push_back(f);
-  }
-  std::cout << selected_faces.size() << std::endl;
-  PMP::isotropic_remeshing(selected_faces, 0.05, square);
+  Mesh::Halfedge_index h = CGAL::make_quad(Point(0,0,0), Point(1,0,0),
+                                           Point(1,1,0),Point(0,1,0),
+                                           square);
+  CGAL::Euler::split_face(h, next(next(h,square), square), square);
+  PMP::isotropic_remeshing(faces(square), 0.05, square);
   std::cout << "Square now has " << faces(square).size() << " faces" << std::endl;
   PMP::stitch_borders(square);
   CGAL::IO::write_polygon_mesh("square.off", square, CGAL::parameters::stream_precision(17));
-    
   std::vector<Point> square_points;
-  std::cout << "There are: " << square_points.size() << " points in the square." << std::endl;
-    
+
   PMP::sample_triangle_mesh(square,
                               std::back_inserter(square_points),
                               CGAL::parameters::use_poisson_disk_sampling_euclidean(true).
                                                 sampling_radius(sampling_radius).number_of_darts(number_of_darts).random_seed(random_seed));
 
-    
-    
+  std::cout << "There are: " << square_points.size() << " points in the square." << std::endl;
+
+  std::ofstream out("square.xyz");
+  out << std::setprecision(17);
+  std::copy(square_points.begin(), square_points.end(), std::ostream_iterator<Point>(out, "\n"));
+
  /*
   //
-   
+
 #ifdef TEST_PURPOSE
   CGAL::AABB_tree<AABB_face_graph_traits> tree;
   PMP::build_AABB_tree(mesh, tree);
   Face_location query_location_target = PMP::locate_with_AABB_tree(euclidean_points[0], tree, mesh);
   Face_location query_location_source = PMP::locate_with_AABB_tree(euclidean_points[1], tree, mesh);
-    
+
   std::cout << "Euclidean: " << sqrt(CGAL::squared_distance(euclidean_points[0],euclidean_points[1])) << std::endl;
   std::cout << "Geodesic: " << geodesiceApproximation(query_location_source, query_location_target, mesh) << std::endl;
 
     //Test geodesic
   //why can't I use geodesic?????
-   
+
   result=true;
   std::vector<Point> geodesic_points;
   PMP::sample_triangle_mesh(mesh,
@@ -148,7 +145,7 @@ int main(int argc, char* argv[])
   out << std::setprecision(17);
   std::copy(geodesic_points.begin(), geodesic_points.end(), std::ostream_iterator<Point>(out, "\n"));
   std::cout << geodesic_points.size() << std::endl;
-    
+
   for(std::size_t i=0; i<geodesic_points.size(); i++){
     c = 100;
     Face_location query_location_source = PMP::locate_with_AABB_tree(geodesic_points[i], tree, mesh);
